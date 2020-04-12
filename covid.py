@@ -7,6 +7,7 @@ import dash_html_components as html
 import flask
 import pandas as pd
 import plotly.graph_objs as gobs
+import requests
 
 # TODO Move the Dash css to local directory to edit
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',
@@ -23,10 +24,36 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_sc
 
 # DATA IMPORT
 # ============
-data = pd.read_csv(
-    'https://data.humdata.org/dataset/0d089fa0-3567-4b01-9c03-39d340ff34e3/resource/c59b5722-ca4b-41ca-a446-472d6d824d01/download/ebola_data_db_format.csv')
+countries = requests.get('https://api.covid19api.com/countries').json()
+country_slugs = sorted([country['Slug'] for country in countries])
+
+base = 'https://api.covid19api.com/dayone/country/'
+
+indicators = ['confirmed', 'deaths']
+
+countries_data = []
+
+
+for country_slug in country_slugs:
+    print('Retrieving data for Country {}'.format(country_slug))
+    for indicator in indicators:
+        url = base + country_slug + '/status/' + indicator
+        country_data = requests.get(url).json()
+
+        country_df = pd.DataFrame(country_data)
+
+        countries_data.append(country_df)
+    
+data = pd.concat(countries_data)
 data['Date'] = pd.to_datetime(data['Date'])
-data = data[data['Date'] < datetime(2015, 12, 20, 0, 0, 0)]
+
+
+# Group the data by Country, Status (indicator) and Date to aggregate the regional data
+data = data.groupby(['Country', 'Status', 'Date']).sum().reset_index()
+data.sort_values(['Country', 'Status', 'Date'], inplace=True)
+
+country_names = data['Country'].unique().tolist()
+indicator_names = data['Status'].unique().tolist()
 
 # CONTROLLER
 # ===========
@@ -34,14 +61,14 @@ data = data[data['Date'] < datetime(2015, 12, 20, 0, 0, 0)]
 country_selector = dcc.Dropdown(
     id='country-selector',
     options=[{'label': i, 'value': i} for i in data["Country"].unique()],
-    value=["Guinea", "Liberia"],
+    value=country_names,
     multi=True
 )
 
 indicator_selector = dcc.Dropdown(
     id='indicator-selector',
-    options=[{'label': i, 'value': i} for i in data["Indicator"].unique()],
-    value="Case fatality rate (CFR) of suspected Ebola cases",
+    options=[{'label': i, 'value': i} for i in data["Status"].unique()],
+    value='confirmed',
     multi=False
 )
 
@@ -55,7 +82,7 @@ plot = html.Div(id="plot-container",
 # =========
 
 header = html.Div([
-    html.H1("The West African Ebolavirus Outbreak")
+    html.H1("COVID-19 Time Series")
 ])
 
 app.layout = html.Div([
@@ -77,7 +104,8 @@ app.layout = html.Div([
     ]
 )
 def create_graph(country, indicator):
-    df = data[data["Indicator"] == indicator]
+
+    df = data[data["Status"] == indicator]
 
     if isinstance(country, str):
         df = df[df["Country"] == country]
@@ -89,7 +117,7 @@ def create_graph(country, indicator):
         _data = df[df["Country"] == country]
         traces.append(gobs.Scatter(
             x=_data['Date'],
-            y=_data['value'],
+            y=_data['Cases'],
             name=country
         ))
 
