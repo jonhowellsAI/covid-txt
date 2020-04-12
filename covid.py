@@ -21,7 +21,6 @@ server = flask.Flask(__name__)
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts, server=server)
 
 
-# TODO Replace with COVID data via API
 # DATA IMPORT
 # ============
 data = pd.read_csv(
