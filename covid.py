@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
-
+import os, json
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -8,6 +8,11 @@ import flask
 import pandas as pd
 import plotly.graph_objs as gobs
 import requests
+
+
+from tqdm import tqdm
+import re
+import numpy as np
 
 # TODO Move the Dash css to local directory to edit
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',

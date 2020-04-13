@@ -4,6 +4,8 @@ A Dash application to explore the [COVID-19 Open Research Dataset (CORD-19)](htt
 
 Deployed as a Dash app using Docker on AWS's Elastic Container Service (ECS) using AWS FARGATE. 
 
+Download the dataset from kaggle here [COVID-19 Open Research Dataset (CORD-19)](https://www.kaggle.com/allen-institute-for-ai/CORD-19-research-challenge).
+
 ## Local development
 
 1. Create a Python venv with a >=3.6 interpreter.
