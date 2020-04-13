@@ -24,113 +24,98 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_sc
 
 # DATA IMPORT
 # ============
-countries = requests.get('https://api.covid19api.com/countries').json()
-country_slugs = sorted([country['Slug'] for country in countries])
+docs = []
 
-base = 'https://api.covid19api.com/dayone/country/'
+# dirs = ['biorxiv_medrxiv',"comm_use_subset", "noncomm_use_subset", "custom_license"]
+dirs = ['biorxiv_medrxiv']
+for d in dirs: 
+    print(d)
+    for file in tqdm(os.listdir(f"{d}/{d}")):
+        file_path = f"{d}/{d}/{file}"
+        j = json.load(open(file_path, "rb"))
 
-indicators = ['confirmed', 'deaths']
+        title = j["metadata"]["title"]
 
-countries_data = []
+        try:
+            abstract = j['abstract'][0]
+
+        except:
+            abtract = ""
+
+        full_text = ""
+
+        for text in j['body_text']:
+
+            full_text += text['text']+'\n\n'
+
+        
+        docs.append([title, abstract, full_text])
+
+df  = pd.DataFrame(docs, columns=['title', 'abstract', 'full_text'])
+# print(df.head())
+
+# figuring out incubation period of the virus
+incubation = df[df['full_text'].str.contains('incubation')]
+# print(incubation.head())
+
+paras = incubation['full_text'].values
+incubation_time = []
+
+for text in paras:
+    for sentence in text.split(". "):
+        if "incubation" in sentence:
+            day = re.findall(r" \d{1,2} day", sentence)
+            if len(day) == 1:
+                num = day[0].split(" ")
+                incubation_time.append(float(num[1]))
 
 
-for country_slug in country_slugs:
-    print('Retrieving data for Country {}'.format(country_slug))
-    for indicator in indicators:
-        url = base + country_slug + '/status/' + indicator
-        country_data = requests.get(url).json()
-
-        country_df = pd.DataFrame(country_data)
-
-        countries_data.append(country_df)
-    
-data = pd.concat(countries_data)
-data['Date'] = pd.to_datetime(data['Date'])
-
-
-# Group the data by Country, Status (indicator) and Date to aggregate the regional data
-data = data.groupby(['Country', 'Status', 'Date']).sum().reset_index()
-data.sort_values(['Country', 'Status', 'Date'], inplace=True)
-
-country_names = data['Country'].unique().tolist()
-indicator_names = data['Status'].unique().tolist()
-
-# CONTROLLER
-# ===========
-
-country_selector = dcc.Dropdown(
-    id='country-selector',
-    options=[{'label': i, 'value': i} for i in data["Country"].unique()],
-    value=country_names,
-    multi=True
-)
-
-indicator_selector = dcc.Dropdown(
-    id='indicator-selector',
-    options=[{'label': i, 'value': i} for i in data["Status"].unique()],
-    value='confirmed',
-    multi=False
-)
+print(incubation_time)
 
 # PLOT
 # ====
 
-plot = html.Div(id="plot-container",
-                children=[dcc.Graph(id="main-plot")])
+colors = {
+    'background': '#111111',
+    'text': '#7FDBFF'
+}
 
-# STRUCTURE
-# =========
+app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
+    html.H1(
+        children='Wash your hands, stay safe   ',
+        style={
+            'textAlign': 'center',
+            'color': colors['text']
+        }
+    ),
 
-header = html.Div([
-    html.H1("COVID-19 Time Series")
-])
+    html.Div(children='COVID 19: Displaying incubation periods.', style={
+        'textAlign': 'center',
+        'color': colors['text']
+    }),
 
-app.layout = html.Div([
-    header,
-    dcc.Loading(plot),
-    country_selector,
-    indicator_selector
+    dcc.Graph(
+        id='example-graph-2',
+        figure={
+            'data': [
+                {'x': incubation_time, 'y': list(np.arange(1,len(incubation_time))), 'type': 'bar'},
+                
+            ],
+            'layout': {
+                'plot_bgcolor': colors['background'],
+                'paper_bgcolor': colors['background'],
+                'font': {
+                    'color': colors['text']
+                }
+            }
+        }
+    )
 ])
 
 
 # CHART UPDATING
 # ==============
 
-@app.callback(
-    dash.dependencies.Output('main-plot', 'figure'),
-    [
-        dash.dependencies.Input('country-selector', 'value'),
-        dash.dependencies.Input('indicator-selector', 'value')
-    ]
-)
-def create_graph(country, indicator):
-
-    df = data[data["Status"] == indicator]
-
-    if isinstance(country, str):
-        df = df[df["Country"] == country]
-    else:
-        df = df[df["Country"].isin(country)]
-
-    traces = []
-    for country in df["Country"].unique():
-        _data = df[df["Country"] == country]
-        traces.append(gobs.Scatter(
-            x=_data['Date'],
-            y=_data['Cases'],
-            name=country
-        ))
-
-    return {
-        'data': traces,
-        'layout': gobs.Layout(
-            xaxis={"title": "Date"},
-            yaxis={"title": indicator},
-            height=625,
-            showlegend=True,
-            hovermode="closest"
-        )
-    }
 
 
 if __name__ == '__main__':
