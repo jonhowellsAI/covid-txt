@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
-
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import flask
-import pandas as pd
 import plotly.graph_objs as gobs
-import requests
 
-# TODO Move the Dash css to local directory to edit
+from data import indicators
+
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',
                         'https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css']
 
@@ -21,36 +18,9 @@ external_scripts = ['https://code.jquery.com/jquery-3.2.1.slim.min.js',
 server = flask.Flask(__name__)
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, external_scripts=external_scripts, server=server)
 
-
 # DATA IMPORT
 # ============
-countries = requests.get('https://api.covid19api.com/countries').json()
-country_slugs = sorted([country['Slug'] for country in countries])
-
-base = 'https://api.covid19api.com/dayone/country/'
-
-indicators = ['confirmed', 'deaths']
-
-countries_data = []
-
-
-for country_slug in country_slugs:
-    print('Retrieving data for Country {}'.format(country_slug))
-    for indicator in indicators:
-        url = base + country_slug + '/status/' + indicator
-        country_data = requests.get(url).json()
-
-        country_df = pd.DataFrame(country_data)
-
-        countries_data.append(country_df)
-    
-data = pd.concat(countries_data)
-data['Date'] = pd.to_datetime(data['Date'])
-
-
-# Group the data by Country, Status (indicator) and Date to aggregate the regional data
-data = data.groupby(['Country', 'Status', 'Date']).sum().reset_index()
-data.sort_values(['Country', 'Status', 'Date'], inplace=True)
+data = indicators.download_indicators()
 
 country_names = data['Country'].unique().tolist()
 indicator_names = data['Status'].unique().tolist()
@@ -74,19 +44,17 @@ indicator_selector = dcc.Dropdown(
 
 # PLOT
 # ====
-
 plot = html.Div(id="plot-container",
                 children=[dcc.Graph(id="main-plot")])
 
 # STRUCTURE
 # =========
-
 header = html.Div([
     html.H1("COVID-19 Time Series")
 ])
 
 app.layout = html.Div([
-    header,
+    html.Img(src='/assets/logo.png'),
     dcc.Loading(plot),
     country_selector,
     indicator_selector
@@ -95,7 +63,6 @@ app.layout = html.Div([
 
 # CHART UPDATING
 # ==============
-
 @app.callback(
     dash.dependencies.Output('main-plot', 'figure'),
     [
